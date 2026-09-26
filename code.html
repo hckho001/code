@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金句座標解密互動遊戲</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti for Celebration -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;900&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Zen Maru Gothic', 'Noto Serif TC', sans-serif;
+            background: linear-gradient(135deg, #fef3c7 0%, #fff7ed 50%, #fed7aa 100%);
+            min-height: 100vh;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(11, minmax(0, 1fr));
+            gap: 4px;
+        }
+
+        .grid-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            user-select: none;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .char-btn {
+            background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%);
+            border: 2px solid #fca5a5;
+            color: #451a03;
+            box-shadow: 0 3px 0 #f87171, 0 4px 6px rgba(0,0,0,0.05);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .char-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 0 #f87171, 0 6px 10px rgba(0,0,0,0.1);
+            background: #fff;
+        }
+
+        .char-btn:active:not(:disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 #f87171;
+        }
+
+        .char-btn.found {
+            background: linear-gradient(180deg, #fef08a 0%, #fde047 100%);
+            border-color: #eab308;
+            color: #713f12;
+            box-shadow: 0 3px 0 #ca8a04, 0 0 12px rgba(234, 179, 8, 0.4);
+            animation: pulse-gold 1.5s infinite alternate;
+        }
+
+        .char-btn.shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+            border-color: #ef4444;
+            background: #fee2e2;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        @keyframes pulse-gold {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+
+        .header-cell {
+            background-color: #f97316;
+            color: white;
+            border-radius: 50%;
+            font-weight: 800;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);
+        }
+
+        .row-header-cell {
+            background-color: #fb923c;
+            color: white;
+            border-radius: 50%;
+            font-weight: 800;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #ffe4e6;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #fb7185;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="p-2 sm:p-4 md:p-6 flex flex-col items-center justify-between min-h-screen">
+
+    <header class="w-full max-w-4xl text-center mb-4">
+        <div class="inline-block bg-white/80 backdrop-blur border-2 border-orange-300 rounded-full px-6 py-2 shadow-sm mb-2">
+            <h1 class="text-2xl sm:text-3xl font-black text-amber-900 tracking-wide flex items-center justify-center gap-2">
+                <i class="fa-solid font-bold fa-map-location-dot text-orange-500"></i> 金句座標解密互動遊戲
+            </h1>
+        </div>
+        <p class="text-amber-800 text-xs sm:text-sm font-semibold">對照座標找出字詞，完成 16 個按鈕即可解開詩篇金句！</p>
+    </header>
+
+    <main class="w-full max-w-4xl flex flex-col lg:flex-row gap-6 items-center lg:items-start justify-center">
+
+        <!-- Left Side: Interactive 10x10 Grid -->
+        <div class="w-full max-w-md bg-white/90 backdrop-blur rounded-3xl p-3 sm:p-5 shadow-xl border-4 border-amber-200/80">
+            <!-- Top Label -->
+            <div class="flex justify-between items-center mb-3 px-2">
+                <span class="text-xs font-extrabold text-amber-700 bg-amber-100 px-3 py-1 rounded-full border border-amber-300">
+                    <i class="fa-solid fa-arrows-left-right"></i> 直行 (1 - 10)
+                </span>
+                <span class="text-xs font-extrabold text-amber-700 bg-amber-100 px-3 py-1 rounded-full border border-amber-300">
+                    橫行 (一 - 十) <i class="fa-solid fa-arrows-up-down"></i>
+                </span>
+            </div>
+
+            <!-- Grid Structure -->
+            <div id="game-grid" class="grid-container text-sm sm:text-base md:text-lg">
+                <!-- Javascript will inject 11x11 cells here -->
+            </div>
+        </div>
+
+        <!-- Right Side: Game Controls, Coordinate List & Progress -->
+        <div class="w-full max-w-md flex flex-col gap-4">
+            
+            <!-- Target / Current Step Box -->
+            <div class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold bg-white/20 px-3 py-1 rounded-full backdrop-blur">
+                        <i class="fa-solid fa-crosshairs mr-1"></i> 解密指示
+                    </span>
+                    <span id="progress-text" class="text-xs font-black bg-amber-900/40 px-2.5 py-1 rounded-full">
+                        進度: 0 / 16
+                    </span>
+                </div>
+
+                <!-- Guidance Box -->
+                <div id="current-target-card" class="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/20 text-center">
+                    <p class="text-xs text-amber-100 mb-1">請尋找下一個座標：</p>
+                    <div id="target-coord-display" class="text-3xl font-black text-yellow-200 tracking-wider my-1 drop-shadow">
+                        3一
+                    </div>
+                    <p id="target-hint" class="text-xs text-amber-100">
+                        提示：第 <span class="font-bold text-white underline">3</span> 行 (直)，第 <span class="font-bold text-white underline">一</span> 列 (橫)
+                    </p>
+                </div>
+            </div>
+
+            <!-- Mode Switch & Controls -->
+            <div class="bg-white/90 backdrop-blur rounded-2xl p-4 shadow-md border border-amber-200 flex items-center justify-between gap-2">
+                <div class="flex gap-2">
+                    <button id="btn-mode-step" onclick="setMode('step')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-orange-500 text-white shadow">
+                        <i class="fa-solid fa-shoe-prints"></i> 逐步解密
+                    </button>
+                    <button id="btn-mode-free" onclick="setMode('free')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-amber-100 text-amber-800 hover:bg-amber-200">
+                        <i class="fa-solid fa-border-all"></i> 自由點擊
+                    </button>
+                </div>
+                <button onclick="resetGame()" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all flex items-center gap-1">
+                    <i class="fa-solid fa-rotate-right"></i> 重來
+                </button>
+            </div>
+
+            <!-- Coordinates Badges List -->
+            <div class="bg-white/90 backdrop-blur rounded-2xl p-4 shadow-md border border-amber-200">
+                <h3 class="text-xs font-bold text-amber-900 mb-3 flex items-center justify-between">
+                    <span><i class="fa-solid fa-list-check text-orange-500 mr-1"></i> 16 個金句座標清單</span>
+                    <span class="text-[10px] text-amber-600 font-normal">點擊已解開的座標可查看字詞</span>
+                </h3>
+                <div id="coord-badges-container" class="grid grid-cols-4 gap-2 text-center text-xs">
+                    <!-- Badges injected by JS -->
+                </div>
+            </div>
+
+            <!-- Collected Sentence Box -->
+            <div class="bg-amber-50 rounded-2xl p-4 shadow-inner border border-amber-200">
+                <h3 class="text-xs font-bold text-amber-800 mb-2 flex items-center gap-1">
+                    <i class="fa-solid fa-scroll text-amber-600"></i> 已集齊的金句字詞：
+                </h3>
+                <div id="collected-sentence" class="min-h-[42px] flex flex-wrap gap-1.5 items-center justify-start text-amber-950 font-bold text-base sm:text-lg">
+                    <span class="text-xs text-amber-400 font-normal italic">（按座標按下對應字詞...）</span>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="victory-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-gradient-to-b from-amber-50 to-orange-100 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border-4 border-yellow-400 text-center transform scale-95 transition-all">
+            <div class="w-16 h-16 bg-yellow-400 text-amber-900 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-lg animate-bounce">
+                <i class="fa-solid fa-crown"></i>
+            </div>
+            <h2 class="text-2xl sm:text-3xl font-black text-amber-900 mb-2">恭喜！完成解密！</h2>
+            <p class="text-xs sm:text-sm text-amber-800 mb-6 font-semibold">你已成功找出所有座標，解開了這段寶貴的金句：</p>
+
+            <!-- Complete Scripture Card -->
+            <div class="bg-white rounded-2xl p-5 border-2 border-amber-300 shadow-md mb-6">
+                <p class="text-amber-600 font-extrabold text-xs mb-2">《聖經》詩篇 19 篇 1 節</p>
+                <blockquote class="text-xl sm:text-2xl font-black text-amber-950 tracking-widest leading-relaxed font-serif">
+                    「諸天述說神的榮耀，<br>穹蒼傳揚祂的手段。」
+                </blockquote>
+            </div>
+
+            <div class="flex gap-3 justify-center">
+                <button onclick="resetGame(); closeModal();" class="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg transition-all text-sm flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-play"></i> 再玩一次
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Web Audio API Sound Synthesizer (No external assets required)
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function playSound(type) {
+            try {
+                if (!audioCtx) audioCtx = new AudioContext();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'click') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                    osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.1);
+                } else if (type === 'wrong') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+                    osc.frequency.setValueAtTime(160, audioCtx.currentTime + 0.1);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.25);
+                } else if (type === 'win') {
+                    const notes = [523.25, 659.25, 783.99, 1046.50]; // C E G C
+                    notes.forEach((freq, idx) => {
+                        const noteOsc = audioCtx.createOscillator();
+                        const noteGain = audioCtx.createGain();
+                        noteOsc.connect(noteGain);
+                        noteGain.connect(audioCtx.destination);
+                        
+                        noteOsc.type = 'triangle';
+                        noteOsc.frequency.setValueAtTime(freq, audioCtx.currentTime + idx * 0.12);
+                        noteGain.gain.setValueAtTime(0.2, audioCtx.currentTime + idx * 0.12);
+                        noteGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + idx * 0.12 + 0.4);
+                        
+                        noteOsc.start(audioCtx.currentTime + idx * 0.12);
+                        noteOsc.stop(audioCtx.currentTime + idx * 0.12 + 0.4);
+                    });
+                }
+            } catch (e) {
+                console.log("Audio play blocked or unsupported");
+            }
+        }
+
+        // 10x10 Matrix Mapping directly from image
+        const gridMatrix = [
+            ['好', '劣', '諸', '地', '累', '牠', '阿', '部', '元', '蒼'], // Row 1 (一)
+            ['女', '天', '杯', '動', '作', '神', '渴', '署', '患', '蠅'], // Row 2 (二)
+            ['匠', '祂', '圾', '木', '文', '吹', '椏', '樹', '傳', '能'], // Row 3 (三)
+            ['叉', '江', '說', '患', '段', '問', '人', '搖', '化', '偉'], // Row 4 (四)
+            ['美', '水', '永', '穩', '辰', '題', '述', '風', '安', '妙'], // Row 5 (五)
+            ['患', '穹', '朽', '蛛', '力', '姐', '極', '宏', '揚', '甸'], // Row 6 (六)
+            ['米', '河', '梗', '鄉', '的', '宗', '友', '閣', '仔', '眠'], // Row 7 (七)
+            ['飯', '水', '張', '平', '無', '族', '販', '榮', '病', '來'], // Row 8 (八)
+            ['耀', '涼', '禾', '署', '之', '版', '炊', '囚', '患', '於'], // Row 9 (九)
+            ['心', '溫', '田', '甸', '枷', '支', '手', '軍', '隊', '湖']  // Row 10 (十)
+        ];
+
+        const rowChinese = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+
+        // Target 16 Coordinates Sequence from prompt:
+        // 1. 3一 2. 2二 3. 7五 4. 3四 5. 6二 6. 5七 7. 8八 8. 1九
+        // 9. 2六 10. 10一 11. 9三 12. 9六 13. 2三 14. 5七 15. 7十 16. 5四
+        const targetCoordinates = [
+            { col: 3, row: 1, coordStr: "3一", char: "諸" },
+            { col: 2, row: 2, coordStr: "2二", char: "天" },
+            { col: 7, row: 5, coordStr: "7五", char: "述" },
+            { col: 3, row: 4, coordStr: "3四", char: "說" },
+            { col: 6, row: 2, coordStr: "6二", char: "神" },
+            { col: 5, row: 7, coordStr: "5七", char: "的" },
+            { col: 8, row: 8, coordStr: "8八", char: "榮" },
+            { col: 1, row: 9, coordStr: "1九", char: "耀" },
+            { col: 2, row: 6, coordStr: "2六", char: "穹" },
+            { col: 10, row: 1, coordStr: "10一", char: "蒼" },
+            { col: 9, row: 3, coordStr: "9三", char: "傳" },
+            { col: 9, row: 6, coordStr: "9六", char: "揚" },
+            { col: 2, row: 3, coordStr: "2三", char: "祂" },
+            { col: 5, row: 7, coordStr: "5七", char: "的" },
+            { col: 7, row: 10, coordStr: "7十", char: "手" },
+            { col: 5, row: 4, coordStr: "5四", char: "段" }
+        ];
+
+        let currentStepIndex = 0;
+        let foundSteps = new Array(targetCoordinates.length).fill(false);
+        let gameMode = 'step'; // 'step' or 'free'
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderGrid();
+            renderBadges();
+            updateUI();
+        });
+
+        function renderGrid() {
+            const gridEl = document.getElementById('game-grid');
+            gridEl.innerHTML = '';
+
+            // 1. Top-Left Corner empty cell
+            const cornerCell = document.createElement('div');
+            cornerCell.className = 'grid-cell text-amber-300 font-bold text-xs';
+            cornerCell.innerText = '行\\列';
+            gridEl.appendChild(cornerCell);
+
+            // 2. Top Header (Cols 1 - 10)
+            for (let c = 1; c <= 10; c++) {
+                const headerCell = document.createElement('div');
+                headerCell.className = 'grid-cell header-cell shadow-sm text-xs sm:text-sm';
+                headerCell.innerText = c;
+                gridEl.appendChild(headerCell);
+            }
+
+            // 3. Rows (1 - 10)
+            for (let r = 1; r <= 10; r++) {
+                // Row Header Cell (一 - 十)
+                const rowHeader = document.createElement('div');
+                rowHeader.className = 'grid-cell row-header-cell shadow-sm text-xs sm:text-sm';
+                rowHeader.innerText = rowChinese[r - 1];
+                gridEl.appendChild(rowHeader);
+
+                // Row Grid Buttons
+                for (let c = 1; c <= 10; c++) {
+                    const char = gridMatrix[r - 1][c - 1];
+                    const btnCell = document.createElement('div');
+                    btnCell.className = 'grid-cell';
+
+                    const button = document.createElement('button');
+                    button.id = `cell-${c}-${r}`;
+                    button.className = 'w-full h-full char-btn flex items-center justify-center font-black';
+                    button.innerText = char;
+                    button.setAttribute('aria-label', `Col ${c} Row ${rowChinese[r-1]} ${char}`);
+                    button.onclick = () => handleCellClick(c, r, char, button);
+
+                    btnCell.appendChild(button);
+                    gridEl.appendChild(btnCell);
+                }
+            }
+        }
+
+        function renderBadges() {
+            const container = document.getElementById('coord-badges-container');
+            container.innerHTML = '';
+
+            targetCoordinates.forEach((item, index) => {
+                const badge = document.createElement('div');
+                badge.id = `badge-${index}`;
+                
+                const isFound = foundSteps[index];
+                const isCurrent = (gameMode === 'step' && index === currentStepIndex && !isFound);
+
+                let bgClass = 'bg-slate-100 text-slate-400 border-slate-200';
+                if (isFound) {
+                    bgClass = 'bg-amber-400 text-amber-950 font-bold border-amber-500 shadow-sm';
+                } else if (isCurrent) {
+                    bgClass = 'bg-orange-500 text-white font-bold border-orange-600 animate-bounce shadow';
+                }
+
+                badge.className = `py-1 px-1.5 rounded-lg border text-xs flex flex-col items-center justify-center transition-all ${bgClass}`;
+                
+                badge.innerHTML = `
+                    <span class="text-[10px] opacity-80">${index + 1}</span>
+                    <span class="font-extrabold">${item.coordStr}</span>
+                    <span class="text-[11px] mt-0.5">${isFound ? item.char : '？'}</span>
+                `;
+
+                container.appendChild(badge);
+            });
+        }
+
+        function handleCellClick(col, row, char, buttonEl) {
+            if (foundSteps.every(Boolean)) return; // Game already completed
+
+            if (gameMode === 'step') {
+                // Step-by-step mode: Must click current target
+                const target = targetCoordinates[currentStepIndex];
+                if (col === target.col && row === target.row) {
+                    // Correct!
+                    playSound('click');
+                    markStepFound(currentStepIndex, buttonEl);
+                } else {
+                    // Wrong click
+                    playSound('wrong');
+                    triggerShake(buttonEl);
+                }
+            } else {
+                // Free mode: Can click any remaining target in list
+                // Find if this col/row matches any unfound step
+                let matchedIndex = -1;
+                for (let i = 0; i < targetCoordinates.length; i++) {
+                    if (!foundSteps[i] && targetCoordinates[i].col === col && targetCoordinates[i].row === row) {
+                        matchedIndex = i;
+                        break;
+                    }
+                }
+
+                if (matchedIndex !== -1) {
+                    playSound('click');
+                    markStepFound(matchedIndex, buttonEl);
+                } else {
+                    playSound('wrong');
+                    triggerShake(buttonEl);
+                }
+            }
+        }
+
+        function triggerShake(element) {
+            element.classList.add('shake');
+            setTimeout(() => {
+                element.classList.remove('shake');
+            }, 450);
+        }
+
+        function markStepFound(index, buttonEl) {
+            foundSteps[index] = true;
+
+            // Apply visual highlight to grid button
+            const coord = targetCoordinates[index];
+            const targetBtn = buttonEl || document.getElementById(`cell-${coord.col}-${coord.row}`);
+            if (targetBtn) {
+                targetBtn.classList.add('found');
+            }
+
+            // Advance currentStepIndex in step mode
+            if (gameMode === 'step') {
+                while (currentStepIndex < targetCoordinates.length && foundSteps[currentStepIndex]) {
+                    currentStepIndex++;
+                }
+            }
+
+            updateUI();
+            checkVictory();
+        }
+
+        function updateUI() {
+            const completedCount = foundSteps.filter(Boolean).length;
+            document.getElementById('progress-text').innerText = `進度: ${completedCount} / ${targetCoordinates.length}`;
+
+            // Update Target Card
+            const targetCard = document.getElementById('current-target-card');
+            if (completedCount === targetCoordinates.length) {
+                targetCard.innerHTML = `
+                    <p class="text-sm font-bold text-yellow-200 py-2">
+                        <i class="fa-solid fa-circle-check"></i> 完美解密完成！
+                    </p>
+                `;
+            } else {
+                let displayCoord = "--";
+                let colVal = "--";
+                let rowVal = "--";
+
+                if (gameMode === 'step' && currentStepIndex < targetCoordinates.length) {
+                    const cur = targetCoordinates[currentStepIndex];
+                    displayCoord = cur.coordStr;
+                    colVal = cur.col;
+                    rowVal = rowChinese[cur.row - 1];
+                } else if (gameMode === 'free') {
+                    displayCoord = "自由探索";
+                    colVal = "任意";
+                    rowVal = "座標";
+                }
+
+                targetCard.innerHTML = `
+                    <p class="text-xs text-amber-100 mb-1">請尋找下一個座標：</p>
+                    <div id="target-coord-display" class="text-3xl font-black text-yellow-200 tracking-wider my-1 drop-shadow">
+                        ${displayCoord}
+                    </div>
+                    <p id="target-hint" class="text-xs text-amber-100">
+                        ${gameMode === 'step' ? `提示：第 <span class="font-bold text-white underline">${colVal}</span> 行 (直)，第 <span class="font-bold text-white underline">${rowVal}</span> 列 (橫)` : '可按清單中任何未點擊的座標找出字詞！'}
+                    </p>
+                `;
+            }
+
+            // Update Collected Sentence Text
+            const sentenceContainer = document.getElementById('collected-sentence');
+            sentenceContainer.innerHTML = '';
+
+            let hasAny = false;
+            targetCoordinates.forEach((item, idx) => {
+                if (foundSteps[idx]) {
+                    hasAny = true;
+                    const charTag = document.createElement('span');
+                    charTag.className = 'px-2 py-1 bg-amber-200 text-amber-950 rounded-lg shadow-sm font-bold border border-amber-300 transform animate-pop';
+                    charTag.innerText = item.char;
+                    sentenceContainer.appendChild(charTag);
+
+                    // Add comma after 8th character for phrasing: 諸天述說神的榮耀，穹蒼傳揚祂的手段
+                    if (idx === 7) {
+                        const comma = document.createElement('span');
+                        comma.className = 'text-amber-700 font-extrabold mr-1';
+                        comma.innerText = '，';
+                        sentenceContainer.appendChild(comma);
+                    }
+                }
+            });
+
+            if (!hasAny) {
+                sentenceContainer.innerHTML = `<span class="text-xs text-amber-400 font-normal italic">（按座標按下對應字詞...）</span>`;
+            }
+
+            // Refresh Badges List
+            renderBadges();
+        }
+
+        function setMode(mode) {
+            gameMode = mode;
+            const btnStep = document.getElementById('btn-mode-step');
+            const btnFree = document.getElementById('btn-mode-free');
+
+            if (mode === 'step') {
+                btnStep.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-orange-500 text-white shadow';
+                btnFree.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-amber-100 text-amber-800 hover:bg-amber-200';
+            } else {
+                btnFree.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-orange-500 text-white shadow';
+                btnStep.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-amber-100 text-amber-800 hover:bg-amber-200';
+            }
+
+            updateUI();
+        }
+
+        function resetGame() {
+            foundSteps.fill(false);
+            currentStepIndex = 0;
+
+            // Remove all highlight styling from grid
+            document.querySelectorAll('.char-btn').forEach(btn => {
+                btn.classList.remove('found', 'shake');
+            });
+
+            updateUI();
+        }
+
+        function checkVictory() {
+            if (foundSteps.every(Boolean)) {
+                setTimeout(() => {
+                    playSound('win');
+                    
+                    // Trigger confetti burst
+                    if (typeof confetti === 'function') {
+                        confetti({
+                            particleCount: 120,
+                            spread: 80,
+                            origin: { y: 0.6 }
+                        });
+                    }
+
+                    // Show Victory Modal
+                    document.getElementById('victory-modal').classList.remove('hidden');
+                }, 400);
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('victory-modal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
